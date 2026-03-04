@@ -24,9 +24,10 @@ const upload = multer({
   }
 });
 
-// CREATE PRODUCT
+// CREATE PRODUCT (supports multiple images)
 router.post("/", (req, res, next) => {
-  upload.single("image")(req, res, (err) => {
+  // accept up to 10 files, adjust as needed
+  upload.array("images", 10)(req, res, (err) => {
     if (err) {
       console.error("Multer/Cloudinary upload error:", err.message);
       return res.status(400).json({ message: `Upload failed: ${err.message}` });
@@ -36,13 +37,19 @@ router.post("/", (req, res, next) => {
 }, async (req, res) => {
   try {
     console.log("=== Product Creation Request ===");
-    console.log("File:", req.file ? `${req.file.originalname} (${req.file.size} bytes, URL: ${req.file.path})` : "No file");
+    if (req.files && req.files.length) {
+      req.files.forEach((f, idx) => {
+        console.log(`File ${idx + 1}: ${f.originalname} (${f.size} bytes, URL: ${f.path})`);
+      });
+    } else {
+      console.log("No files uploaded");
+    }
     console.log("Body:", JSON.stringify(req.body, null, 2));
 
     const { name, price, category, description, sizes } = req.body;
 
-    if (!req.file) {
-      return res.status(400).json({ message: "Image is required" });
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "At least one image is required" });
     }
 
     // Parse sizes correctly: client may send JSON string of array of objects
@@ -68,7 +75,7 @@ router.post("/", (req, res, next) => {
       price,
       category,
       description,
-      image: req.file.path, // ✅ Cloudinary URL
+      images: req.files.map((f) => f.path), // store array of URLs
       sizes: parsedSizes,
     });
 
@@ -86,7 +93,19 @@ router.post("/", (req, res, next) => {
 router.get("/", async (req, res) => {
   try {
     const products = await Product.find();
-    res.json(products);
+    // ensure each product has an images array in the response for backward compatibility
+    const transformed = products.map((p) => {
+      const obj = p.toObject();
+      if (!obj.images || obj.images.length === 0) {
+        if (obj.image) {
+          obj.images = [obj.image];
+        } else {
+          obj.images = [];
+        }
+      }
+      return obj;
+    });
+    res.json(transformed);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
