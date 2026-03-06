@@ -27,9 +27,5 @@ app.use("/api/products", productRoutes);
 console.log("Cloud Name:", process.env.CLOUDINARY_CLOUD_NAME);
 console.log("API Key:", process.env.CLOUDINARY_API_KEY);
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
 
 export default app;
