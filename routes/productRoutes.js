@@ -111,11 +111,91 @@ router.get("/", async (req, res) => {
   }
 });
 
+// GET SINGLE PRODUCT
+router.get("/:id", async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+    // ensure images array
+    if (!product.images || product.images.length === 0) {
+      if (product.image) {
+        product.images = [product.image];
+      } else {
+        product.images = [];
+      }
+    }
+    res.json(product);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// UPDATE PRODUCT
+router.put("/:id", (req, res, next) => {
+  // optional: accept updated images
+  upload.array("images", 10)(req, res, (err) => {
+    if (err) {
+      console.error("Multer/Cloudinary upload error:", err.message);
+      return res.status(400).json({ message: `Upload failed: ${err.message}` });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const { name, price, category, description, sizes } = req.body;
+    const updateData = {};
+
+    if (name) updateData.name = name;
+    if (price) updateData.price = price;
+    if (category) updateData.category = category;
+    if (description) updateData.description = description;
+
+    // if new images uploaded, replace them; else keep existing
+    if (req.files && req.files.length > 0) {
+      updateData.images = req.files.map((f) => f.path);
+    }
+
+    // parse sizes if provided
+    if (sizes) {
+      try {
+        const raw = JSON.parse(sizes);
+        updateData.sizes = raw.map((item) => {
+          if (typeof item === "string") {
+            return { size: item, stock: 0 };
+          }
+          return item;
+        });
+      } catch (e) {
+        console.warn("Failed to parse sizes, ignoring", e);
+      }
+    }
+
+    const product = await Product.findByIdAndUpdate(req.params.id, updateData, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    res.json(product);
+  } catch (error) {
+    console.error("Product update error:", error.message);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // DELETE PRODUCT
 router.delete("/:id", async (req, res) => {
   try {
-    await Product.findByIdAndDelete(req.params.id);
-    res.json({ message: "Product deleted" });
+    const product = await Product.findByIdAndDelete(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+    res.json({ message: "Product deleted successfully", product });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
